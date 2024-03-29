@@ -80,13 +80,13 @@ def parse_date(date_str):
     except ValueError:
         return None
 
-def aggregate_reviews(reviews):
+def aggregate_reviews_task(**context):
+    reviews = context['task_instance'].xcom_pull(task_ids='get_reviews_from_mongodb')
     aggregated_data = {}
     for review in reviews:
         asin = review['asin']
         overall_rating = review['overall']
         review_time = parse_date(review['reviewTime'])
-        
         if asin not in aggregated_data:
             aggregated_data[asin] = {
                 'total_rating': 0,
@@ -99,15 +99,18 @@ def aggregate_reviews(reviews):
                 aggregated_data[asin]['oldest_rating_date'] = review_time
             elif review_time > aggregated_data[asin]['newest_rating_date']:
                 aggregated_data[asin]['newest_rating_date'] = review_time
-                
-            # Ensure newest_rating_date is not less than oldest_rating_date
             if aggregated_data[asin]['newest_rating_date'] < aggregated_data[asin]['oldest_rating_date']:
                 aggregated_data[asin]['newest_rating_date'] = aggregated_data[asin]['oldest_rating_date']
-                
         aggregated_data[asin]['total_rating'] += overall_rating
         aggregated_data[asin]['total_reviews'] += 1
-        
-    return aggregated_data
+    
+    # Sort the aggregated data by average rating in descending order
+    sorted_data = sorted(aggregated_data.items(), key=lambda x: x[1]['total_rating'] / x[1]['total_reviews'], reverse=True)
+    
+    # Select the top 15 games
+    top_15_games = sorted_data[:15]
+    
+    return dict(top_15_games)
 
 
 '''id INT PRIMARY KEY,
